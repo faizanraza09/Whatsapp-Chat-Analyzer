@@ -36,18 +36,6 @@ def plot_message_count_over_time(chat_df, start_date, end_date):
     plt.tight_layout()
     plt.show()
 
-def get_user_activity_df(chat_df):
-    """
-    Returns a DataFrame with user message counts.
-    
-    Parameters:
-    - chat_df: DataFrame containing chat data
-    
-    Returns:
-    - DataFrame with user message counts
-    """
-    return chat_df['User'].value_counts().reset_index().rename(columns={'count': 'Message Count'}).sort_values('Message Count', ascending=False)
-
 
 def plot_user_activity(chat_df):
     """
@@ -182,6 +170,27 @@ def top_emojis_per_user(df):
 def prepare_message_length_data(chat_df):
     chat_df['Message Length'] = chat_df['Message'].apply(len)
     return chat_df
+
+def get_user_activity_stats(chat_df):
+    """
+    Returns a DataFrame with user message counts and average message lengths.
+    
+    Parameters:
+    - chat_df: DataFrame containing chat data with 'User' and 'Message Length' columns
+    
+    Returns:
+    - DataFrame with columns: 'User', 'Message Count', and 'Average Message Length'
+    """
+    # Calculate message count per user
+    message_count = chat_df['User'].value_counts().reset_index().rename(columns={'count': 'Message Count'})
+    # Calculate average message length per user
+    average_message_length = chat_df.groupby('User')['Message Length'].mean().reset_index().rename(columns={'Message Length': 'Average Message Length'})
+
+    # Merge the two dataframes
+    user_activity_stats = pd.merge(message_count, average_message_length, on='User', how='inner')
+    user_activity_stats = user_activity_stats.sort_values(by='Message Count', ascending=False)
+
+    return user_activity_stats
 
 # Function to plot message length usage
 def plot_message_length_usage(chat_df):
