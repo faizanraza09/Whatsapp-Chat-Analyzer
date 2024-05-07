@@ -3,28 +3,66 @@ import seaborn as sns
 from wordcloud import WordCloud
 import emoji
 import networkx as nx
+from collections import Counter
+import pandas as pd
 
 # Set a consistent color scheme
 sns.set_theme(style="whitegrid")
 colors = sns.color_palette("pastel", 20) 
 
-def plot_message_count_over_time(chat_df):
-    """ Generates a plot for message count over time using Matplotlib. """
+def plot_message_count_over_time(chat_df, start_date, end_date):
+    """
+    Generates a plot for message count over time using Matplotlib, filtered by datetime.
+    
+    Parameters:
+    - chat_df: DataFrame containing chat data
+    - start_date: Start date for filtering the data
+    - end_date: End date for filtering the data
+    """
+    # Ensure start_date and end_date are datetime objects if they are not
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
+
+    # Filter data based on the datetime range
+    mask = (chat_df['Datetime'] >= start_date) & (chat_df['Datetime'] <= end_date)
+    filtered_df = chat_df.loc[mask]
+    
     plt.figure(figsize=(10, 5))
-    chat_df.groupby(chat_df['Datetime'].dt.date).size().plot(kind='line', color=colors[0])
+    filtered_df.groupby(filtered_df['Datetime'].dt.date).size().plot(kind='line', color=colors[0])
     plt.title('Message Count Over Time')
     plt.xlabel('Date')
     plt.ylabel('Number of Messages')
     plt.xticks(rotation=45)
     plt.tight_layout()
-    return plt
+    plt.show()
+
+def get_user_activity_df(chat_df):
+    """
+    Returns a DataFrame with user message counts.
+    
+    Parameters:
+    - chat_df: DataFrame containing chat data
+    
+    Returns:
+    - DataFrame with user message counts
+    """
+    return chat_df['User'].value_counts().reset_index().rename(columns={'count': 'Message Count'}).sort_values('Message Count', ascending=False)
+
 
 def plot_user_activity(chat_df):
-    """ Generates a bar plot for user activity using Matplotlib. """
+    """
+    Generates a bar plot for user activity using Matplotlib.
+    
+    Parameters:
+    - chat_df: DataFrame containing chat data
+    
+    Returns:
+    - Matplotlib plot object
+    """
     plt.figure(figsize=(10, 5))
     user_activity = chat_df['User'].value_counts()
     sns.barplot(x=user_activity.index, y=user_activity.values, palette=colors)
-    plt.title('User Activity')
+    plt.title('Message Count by User')
     plt.xlabel('User')
     plt.ylabel('Message Count')
     plt.xticks(rotation=45)
@@ -32,22 +70,47 @@ def plot_user_activity(chat_df):
     return plt
 
 def calculate_response_times(chat_df):
-    """ Calculate response times between messages for each user. """
+    """
+    Calculate response times between messages for each user.
+    
+    Parameters:
+    - chat_df: DataFrame containing chat data
+    
+    Returns:
+    - DataFrame with response times
+    """
     chat_df['Response_time'] = chat_df['Datetime'].diff().shift(-1)
     return chat_df
 
 def plot_response_times(chat_df):
-    """ Plot response times. """
+    """
+    Plot response times.
+    
+    Parameters:
+    - chat_df: DataFrame containing chat data
+    
+    Returns:
+    - Matplotlib plot object
+    """
     response_times = chat_df['Response_time'].dropna()
     plt.figure(figsize=(10, 5))
-    sns.histplot(response_times.dt.seconds / 60, bins=30, color='green')
-    plt.title('Response Time Distribution (in minutes)')
+    sns.histplot(response_times.dt.seconds / 60, bins=30, color=colors[0])
+    plt.title('Response Times')
     plt.xlabel('Minutes')
     plt.ylabel('Frequency')
     plt.tight_layout()
     return plt
 
 def plot_hourly_activity_heatmap(chat_df):
+    """
+    Plot a heatmap of hourly activity.
+    
+    Parameters:
+    - chat_df: DataFrame containing chat data
+    
+    Returns:
+    - Matplotlib plot object
+    """
     chat_df['Hour'] = chat_df['Datetime'].dt.hour
     chat_df['Weekday'] = chat_df['Datetime'].dt.day_name()
     pivot_table = chat_df.pivot_table(index='Weekday', columns='Hour', aggfunc='size', fill_value=0)
@@ -60,64 +123,73 @@ def plot_hourly_activity_heatmap(chat_df):
     plt.tight_layout()
     return plt
 
-
-def message_type_analysis(chat_df):
-    chat_df['Message_Type'] = chat_df['Message'].apply(lambda x: 'Media' if '<Media omitted>' in x else 'Text')
-    message_types = chat_df['Message_Type'].value_counts()
-    
-    plt.figure(figsize=(8, 4))
-    message_types.plot(kind='pie', autopct='%1.1f%%', startangle=140, colors=['gold', 'lightblue'])
-    plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-    plt.title('Message Type Distribution')
-    return plt
-
-
-
 def generate_word_cloud(chat_df):
+    """
+    Generate a word cloud based on chat messages.
+    
+    Parameters:
+    - chat_df: DataFrame containing chat data
+    
+    Returns:
+    - Matplotlib plot object
+    """
     text = ' '.join(chat_df['Message'])
     wordcloud = WordCloud(width=800, height=400, background_color ='white').generate(text)
     
     plt.figure(figsize=(10, 5))
     plt.imshow(wordcloud, interpolation='bilinear')
     plt.axis('off')
-    plt.title('Chat Word Cloud')
     return plt
 
-
-def extract_emojis(text):
-    """Extract all emojis from the given text."""
-    return ''.join(char for char in text if char in emoji.EMOJI_DATA)
-
-def top_emojis_per_user(chat_df):
-    # Extract emojis for each message and associate them with the user
-    chat_df['Emojis'] = chat_df['Message'].apply(extract_emojis)
+def top_emojis_per_user(df):
+    """
+    Get the top emojis used by each user.
     
-    # Explode the DataFrame so each emoji is in its own row but still associated with the user
-    all_emojis = chat_df.explode(list(chat_df['Emojis']))
-    all_emojis = all_emojis.dropna(subset=['Emojis'])  # remove rows where there are no emojis
+    Parameters:
+    - df: DataFrame containing chat data
+    
+    Returns:
+    - DataFrame with top emojis per user
+    """
+    def extract_emojis(text):
+        return ''.join([char for char in text if char in emoji.EMOJI_DATA])
 
-    # Group by user and emoji, then count frequencies
-    emoji_counts = all_emojis.groupby(['User', 'Emojis']).size().reset_index(name='Counts')
+    def top_emojis(emojis, top_n=3):
+        if not emojis:
+            return []
+        counts = Counter(emojis)
+        return [emoji for emoji, _ in counts.most_common(top_n)]
 
-    # Sort the counts and take the top 3 for each user
-    top_emojis = emoji_counts.sort_values(['User', 'Counts'], ascending=[True, False]).groupby('User').head(3)
+    # Apply the emoji extraction to each message
+    df['emojis'] = df['Message'].apply(extract_emojis)
 
-    return top_emojis
+    # Aggregate all emojis used by each user
+    user_emoji_series = df.groupby('User')['emojis'].apply(''.join)
 
-def format_top_emojis(top_emojis):
-    # Pivot table to have emojis as columns
-    result_table = top_emojis.pivot(index='User', columns=top_emojis.groupby('User').cumcount() + 1, values='Emojis').add_prefix('Top Emoji ')
-    result_table = result_table.join(
-        top_emojis.pivot(index='User', columns=top_emojis.groupby('User').cumcount() + 1, values='Counts').add_prefix('Count ')
-    )
-    return result_table.reset_index()
+    # Calculate the top 3 emojis for each user
+    user_top_emojis = user_emoji_series.apply(top_emojis)
 
-def plot_interaction_network(chat_df):
-    """ Plot a network graph of user interactions. """
-    plt.figure(figsize=(10, 8))
-    G = nx.from_pandas_edgelist(chat_df, source='User', target='Message', create_using=nx.Graph())
-    pos = nx.spring_layout(G, k=0.15)
-    nx.draw_networkx(G, pos, node_color='cyan', edge_color='magenta', with_labels=True, node_size=2500, font_size=9)
-    plt.title('Interaction Network')
-    plt.axis('off')
+    # Prepare the final dataframe
+    result = pd.DataFrame({
+        'user': user_top_emojis.index,
+        'top_3_emojis': user_top_emojis
+    }).reset_index(drop=True)
+
+    return result
+
+
+# Function to prepare message length data
+def prepare_message_length_data(chat_df):
+    chat_df['Message Length'] = chat_df['Message'].apply(len)
+    return chat_df
+
+# Function to plot message length usage
+def plot_message_length_usage(chat_df):
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(data=chat_df, x='User', y='Message Length', palette=colors, showfliers=False)
+    plt.title('Distribution of Message Lengths by Each User')
+    plt.xlabel('User')
+    plt.ylabel('Message Length')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
     return plt

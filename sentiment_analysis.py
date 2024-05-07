@@ -7,11 +7,13 @@ def add_sentiment_scores(chat_df):
     chat_df['Subjectivity'] = chat_df['Message'].apply(lambda x: TextBlob(x).sentiment.subjectivity)
     return chat_df
 
-def plot_sentiment_over_time(chat_df):
-    """ Plot sentiment polarity over time. """
+def plot_sentiment_over_time(chat_df, start_date, end_date):
+    """ Plot sentiment polarity over time filtered by date. """
+    # Filter data based on the date range
+    mask = (chat_df['Datetime'] >= start_date) & (chat_df['Datetime'] <= end_date)
+    filtered_df = chat_df.loc[mask]
     plt.figure(figsize=(10, 5))
-    plt.plot(chat_df['Datetime'], chat_df['Polarity'], label='Polarity', color='purple')
-    plt.title('Sentiment Polarity Over Time')
+    plt.plot(filtered_df['Datetime'], filtered_df['Polarity'], label='Polarity', color='purple')
     plt.xlabel('Date')
     plt.ylabel('Sentiment Polarity')
     plt.legend()
